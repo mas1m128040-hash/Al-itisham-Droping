@@ -3,7 +3,11 @@ import autoTable from 'jspdf-autotable';
 import { Transaction, MonthlyRecap } from '../types';
 import { formatRupiah, formatDateIndo, INDO_MONTHS } from './formatters';
 
-export function exportMonthlyPdf(recap: MonthlyRecap, businessName: string = 'TIRTA KEUANGAN (Tangki Air)') {
+export function exportMonthlyPdf(
+  recap: MonthlyRecap,
+  businessName: string = 'TIRTA KEUANGAN (Tangki Air)',
+  appName: string = 'TIRTA KEUANGAN'
+) {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -22,11 +26,11 @@ export function exportMonthlyPdf(recap: MonthlyRecap, businessName: string = 'TI
   doc.setFillColor(6, 182, 212); // cyan-500
   doc.rect(0, 32, 210, 2, 'F');
 
-  // Title: TIRTA KEUANGAN
+  // Title: Dynamic App Name
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text('TIRTA KEUANGAN', 14, 14);
+  doc.text((appName || 'TIRTA KEUANGAN').toUpperCase(), 14, 14);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);

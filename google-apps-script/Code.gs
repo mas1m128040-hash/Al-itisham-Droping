@@ -43,11 +43,20 @@ function doGet(e) {
     if (action === "getInitialData" || action === "getAll") {
       var transactions = getTransactionsFromSheet();
       var categories = getCategoriesFromSheet();
+      var settings = getSettingsFromSheet();
       return createJsonResponse({
         success: true,
         transactions: transactions,
         categories: categories,
+        settings: settings,
         serverTime: new Date().toISOString()
+      });
+    }
+
+    if (action === "getSettings") {
+      return createJsonResponse({
+        success: true,
+        settings: getSettingsFromSheet()
       });
     }
 
@@ -145,6 +154,11 @@ function doPost(e) {
     // 8. Action: Sinkronisasi Bulk Data (Sync All)
     if (action === "syncAll") {
       return syncAllTransactions(data.transactions);
+    }
+
+    // 9. Action: Simpan Pengaturan Global Usaha & Aplikasi (Hanya Admin)
+    if (action === "saveSettings") {
+      return saveSettingsToSheet(data.settings);
     }
 
     return createJsonResponse({
@@ -568,6 +582,112 @@ function initSheetsIfNotExist() {
     userSheet.appendRow(["admin", DEFAULT_ADMIN_PASS, "admin", "Admin Operasional Tangki"]);
     userSheet.appendRow(["viewer", DEFAULT_VIEWER_PASS, "viewer", "Viewer / Pemilik Usaha"]);
   }
+
+  // 4. Sheet Pengaturan (Penyimpanan Pengaturan Global Usaha & Nama Aplikasi)
+  var settingsSheet = ss.getSheetByName(SHEET_PENGATURAN);
+  if (!settingsSheet) {
+    settingsSheet = ss.insertSheet(SHEET_PENGATURAN);
+    var setHeaders = ["Key", "Value", "Keterangan", "Updated_At"];
+    settingsSheet.appendRow(setHeaders);
+    var setHeaderRange = settingsSheet.getRange(1, 1, 1, setHeaders.length);
+    setHeaderRange.setBackground("#0f172a"); // slate-900
+    setHeaderRange.setFontColor("#ffffff");
+    setHeaderRange.setFontWeight("bold");
+    settingsSheet.setFrozenRows(1);
+
+    var now = new Date().toISOString();
+    var defaultSettings = [
+      ["app_name", "TIRTA KEUANGAN", "Nama aplikasi (ditampilkan di header, sidebar, login, judul)", now],
+      ["business_name", "Al I'tisham Droping", "Nama perusahaan atau pemilik armada tangki air", now],
+      ["business_address", "Jl. Raya Sumber Mata Air No. 45, Bogor", "Alamat operasional usaha", now],
+      ["business_phone", "0812-3456-7890", "Nomor telepon atau kontak resmi", now],
+      ["business_trucks", "B 9182 TGA (8.000 L), B 9234 TAB (5.000 L), B 9801 XYZ (16.000 L)", "Daftar armada truk tangki air", now],
+      ["updated_at", now, "Waktu terakhir pembaruan pengaturan", now]
+    ];
+    for (var s = 0; s < defaultSettings.length; s++) {
+      settingsSheet.appendRow(defaultSettings[s]);
+    }
+  }
+}
+
+/**
+ * Membaca Pengaturan Global dari Sheet Pengaturan
+ */
+function getSettingsFromSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_PENGATURAN);
+  if (!sheet) {
+    initSheetsIfNotExist();
+    sheet = ss.getSheetByName(SHEET_PENGATURAN);
+  }
+
+  var values = sheet.getDataRange().getValues();
+  var settings = {};
+
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var k = String(row[0] || "").trim();
+    if (k) {
+      settings[k] = row[1] !== undefined ? String(row[1]) : "";
+    }
+  }
+
+  // Fallback jika belum terisi
+  if (!settings["app_name"]) settings["app_name"] = "TIRTA KEUANGAN";
+  if (!settings["business_name"]) settings["business_name"] = "Al I'tisham Droping";
+  if (!settings["business_address"]) settings["business_address"] = "Jl. Raya Sumber Mata Air No. 45, Bogor";
+  if (!settings["business_phone"]) settings["business_phone"] = "0812-3456-7890";
+  if (!settings["business_trucks"]) settings["business_trucks"] = "B 9182 TGA (8.000 L), B 9234 TAB (5.000 L), B 9801 XYZ (16.000 L)";
+
+  return settings;
+}
+
+/**
+ * Menyimpan Pengaturan Global ke Sheet Pengaturan (Khusus Admin)
+ */
+function saveSettingsToSheet(newSettings) {
+  if (!newSettings || typeof newSettings !== 'object') {
+    return createJsonResponse({ success: false, message: "Data pengaturan tidak valid" });
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_PENGATURAN);
+  if (!sheet) {
+    initSheetsIfNotExist();
+    sheet = ss.getSheetByName(SHEET_PENGATURAN);
+  }
+
+  var values = sheet.getDataRange().getValues();
+  var keyRowMap = {};
+  for (var i = 1; i < values.length; i++) {
+    var k = String(values[i][0] || "").trim();
+    if (k) {
+      keyRowMap[k] = i + 1; // 1-based index
+    }
+  }
+
+  var now = new Date().toISOString();
+  newSettings["updated_at"] = now;
+
+  for (var key in newSettings) {
+    if (Object.prototype.hasOwnProperty.call(newSettings, key)) {
+      var val = String(newSettings[key] !== undefined && newSettings[key] !== null ? newSettings[key] : "").trim();
+      if (keyRowMap[key]) {
+        var rIdx = keyRowMap[key];
+        sheet.getRange(rIdx, 2).setValue(val);
+        sheet.getRange(rIdx, 4).setValue(now);
+      } else {
+        sheet.appendRow([key, val, "Pengaturan sistem", now]);
+        keyRowMap[key] = sheet.getLastRow();
+      }
+    }
+  }
+
+  return createJsonResponse({
+    success: true,
+    message: "Pengaturan global berhasil disimpan ke Google Spreadsheet!",
+    settings: getSettingsFromSheet()
+  });
 }
 
 /**

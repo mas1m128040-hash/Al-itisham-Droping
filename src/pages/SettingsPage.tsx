@@ -33,7 +33,7 @@ interface SettingsPageProps {
   onSyncSuccess: () => void;
   isSheetsConnected: boolean;
   businessProfile: BusinessProfile;
-  onSaveBusinessProfile: (profile: BusinessProfile) => void;
+  onSaveBusinessProfile: (profile: BusinessProfile) => Promise<{ success: boolean; message: string }>;
   onOpenInstallModal?: () => void;
 }
 
@@ -68,6 +68,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [trucks, setTrucks] = useState(businessProfile.trucks);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSaveSuccess, setProfileSaveSuccess] = useState<string | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
 
   // Sync state if businessProfile prop changes
   useEffect(() => {
@@ -77,8 +78,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setTrucks(businessProfile.trucks);
   }, [businessProfile]);
 
-  // Handle saving business profile
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // Handle saving business profile to Google Spreadsheet (sheet Pengaturan)
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) {
       alert('Akses Ditolak: Hanya Admin yang berhak menyimpan perubahan pengaturan profil usaha.');
@@ -91,20 +92,32 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
 
     setIsSavingProfile(true);
+    setProfileSaveSuccess(null);
+    setProfileSaveError(null);
+
     const updatedProfile: BusinessProfile = {
       appName: appName.trim(),
-      businessName: businessName.trim() || 'TIRTA KEUANGAN',
+      businessName: businessName.trim() || "Al I'tisham Droping",
       address: businessAddress.trim(),
       trucks: trucks.trim(),
     };
 
-    onSaveBusinessProfile(updatedProfile);
-    setProfileSaveSuccess('Pengaturan nama aplikasi dan profil usaha berhasil disimpan!');
-    setIsSavingProfile(false);
-
-    setTimeout(() => {
-      setProfileSaveSuccess(null);
-    }, 4000);
+    try {
+      const res = await onSaveBusinessProfile(updatedProfile);
+      if (res.success) {
+        setProfileSaveSuccess(res.message || 'Pengaturan nama aplikasi & profil usaha berhasil disimpan ke Google Spreadsheet!');
+        setTimeout(() => {
+          setProfileSaveSuccess(null);
+        }, 5000);
+      } else {
+        setProfileSaveError(res.message || 'Gagal menyimpan pengaturan ke server Google Spreadsheet.');
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setProfileSaveError(`Gagal menyimpan: ${errorMsg}`);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   // Handle testing GAS connection
@@ -285,7 +298,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           {profileSaveSuccess && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800 animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="font-semibold">{profileSaveSuccess}</span>
+              <span className="font-semibold text-xs sm:text-sm">{profileSaveSuccess}</span>
+            </div>
+          )}
+
+          {profileSaveError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-800 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span className="font-semibold text-xs sm:text-sm">{profileSaveError}</span>
             </div>
           )}
 
@@ -297,8 +317,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 disabled={isSavingProfile}
                 className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white rounded-xl text-xs font-bold shadow-md shadow-cyan-600/20 flex items-center gap-2 transition active:scale-95 disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
-                <span>Simpan Pengaturan Usaha</span>
+                {isSavingProfile ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan ke Spreadsheet...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Pengaturan Usaha</span>
+                  </>
+                )}
               </button>
             </div>
           )}

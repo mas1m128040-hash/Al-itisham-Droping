@@ -8,7 +8,7 @@ const STORAGE_BUSINESS_PROFILE = 'tangki_air_business_profile_v1';
 
 export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
   appName: 'TIRTA KEUANGAN',
-  businessName: 'CV. Tirta Lancar Abadi (Tangki Air)',
+  businessName: "Al I'tisham Droping",
   address: 'Jl. Raya Sumber Mata Air No. 45, Bogor',
   trucks: 'B 9182 TGA (8.000 L), B 9234 TAB (5.000 L), B 9801 XYZ (16.000 L)',
   phone: '0812-3456-7890',
@@ -19,11 +19,13 @@ export interface GasApiResponse<T = unknown> {
   message?: string;
   transactions?: Transaction[];
   categories?: Category[];
+  settings?: Record<string, string>;
   transaction?: Transaction;
   category?: Category;
   user?: User;
   data?: T;
   spreadsheetTitle?: string;
+  serverTime?: string;
 }
 
 // Default URL dari environment variable (Vite / Vercel build: VITE_APPS_SCRIPT_URL)
@@ -129,6 +131,14 @@ export class AppApiService {
     }
   }
 
+  public static setLocalBusinessProfile(profile: BusinessProfile): void {
+    try {
+      localStorage.setItem(STORAGE_BUSINESS_PROFILE, JSON.stringify(profile));
+    } catch {
+      // ignore storage error
+    }
+  }
+
   public static setBusinessProfile(
     profile: BusinessProfile,
     currentUser?: User | null
@@ -139,16 +149,82 @@ export class AppApiService {
         message: 'Akses Ditolak: Hanya Admin yang dapat memperbarui pengaturan profil usaha.',
       };
     }
-    try {
-      localStorage.setItem(STORAGE_BUSINESS_PROFILE, JSON.stringify(profile));
-      return {
-        success: true,
-        message: 'Pengaturan profil usaha dan nama aplikasi berhasil disimpan!',
-      };
-    } catch (err) {
+    this.setLocalBusinessProfile(profile);
+    return {
+      success: true,
+      message: 'Pengaturan profil usaha berhasil disimpan!',
+    };
+  }
+
+  /**
+   * Menyimpan profil usaha & nama aplikasi ke Google Spreadsheet (sheet Pengaturan)
+   * Hanya akun ADMIN yang diizinkan menyimpan perubahan ke backend.
+   */
+  public static async saveBusinessProfile(
+    profile: BusinessProfile,
+    currentUser: User
+  ): Promise<{ success: boolean; message: string; profile?: BusinessProfile }> {
+    if (currentUser.role !== 'admin') {
       return {
         success: false,
-        message: 'Gagal menyimpan profil: ' + (err instanceof Error ? err.message : String(err)),
+        message: 'Akses Ditolak: Hanya Admin yang dapat memperbarui pengaturan profil usaha.',
+      };
+    }
+
+    const url = this.getAppsScriptUrl();
+    if (!url) {
+      this.setLocalBusinessProfile(profile);
+      return {
+        success: true,
+        message: 'Pengaturan disimpan secara lokal (URL Google Apps Script belum terkonfigurasi).',
+        profile,
+      };
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'saveSettings',
+          settings: {
+            app_name: profile.appName.trim(),
+            business_name: profile.businessName.trim(),
+            business_address: profile.address.trim(),
+            business_trucks: profile.trucks.trim(),
+            business_phone: (profile.phone || '').trim(),
+          },
+          userRole: currentUser.role,
+          user: { username: currentUser.username, role: currentUser.role },
+          token: currentUser.token,
+        }),
+      });
+
+      const json = await response.json();
+      if (json.success) {
+        const updatedProfile: BusinessProfile = {
+          appName: json.settings?.app_name || profile.appName,
+          businessName: json.settings?.business_name || profile.businessName,
+          address: json.settings?.business_address || profile.address,
+          trucks: json.settings?.business_trucks || profile.trucks,
+          phone: json.settings?.business_phone || profile.phone,
+        };
+        this.setLocalBusinessProfile(updatedProfile);
+        return {
+          success: true,
+          message: json.message || 'Pengaturan global berhasil disimpan ke Google Spreadsheet!',
+          profile: updatedProfile,
+        };
+      } else {
+        return {
+          success: false,
+          message: json.message || 'Gagal menyimpan pengaturan ke Google Spreadsheet.',
+        };
+      }
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: 'Gagal menghubungi server Apps Script: ' + (err instanceof Error ? err.message : String(err)),
       };
     }
   }
@@ -176,13 +252,15 @@ export class AppApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      // Testing via GET action=testConnection
-      const testEndpoint = `${url}${url.includes('?') ? '&' : '?'}action=testConnection`;
+      // Testing via GET action=testConnection dengan cache-busting
+      const testEndpoint = `${url}${url.includes('?') ? '&' : '?'}action=testConnection&_t=${Date.now()}`;
       const response = await fetch(testEndpoint, {
         method: 'GET',
+        cache: 'no-store',
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
       });
 
@@ -224,33 +302,43 @@ export class AppApiService {
   }
 
   /**
-   * Mengambil data transaksi dan kategori dari Google Apps Script atau Local fallback
+   * Mengambil data transaksi, kategori, dan pengaturan dari Google Apps Script secara langsung (single source of truth).
    */
   public static async fetchAllData(): Promise<{
     transactions: Transaction[];
     categories: Category[];
+    settings?: BusinessProfile;
     fromSpreadsheet: boolean;
     error?: string;
   }> {
     const url = this.getAppsScriptUrl();
     const localTrx = this.getLocalTransactions();
     const localCats = this.getLocalCategories();
+    const localProfile = this.getBusinessProfile();
 
     if (!url) {
       return {
         transactions: localTrx,
         categories: localCats,
+        settings: localProfile,
         fromSpreadsheet: false,
       };
     }
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      const endpoint = `${url}${url.includes('?') ? '&' : '?'}action=getInitialData`;
+      // Cache busting parameter & no-store guarantee agar HP tidak memakai cache lama
+      const endpoint = `${url}${url.includes('?') ? '&' : '?'}action=getInitialData&_t=${Date.now()}`;
       const res = await fetch(endpoint, {
         method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
         signal: controller.signal,
       });
 
@@ -258,15 +346,38 @@ export class AppApiService {
 
       if (res.ok) {
         const json = (await res.json()) as GasApiResponse;
-        if (json.success && Array.isArray(json.transactions)) {
-          // Update local cache
-          this.setLocalTransactions(json.transactions);
-          if (Array.isArray(json.categories) && json.categories.length > 0) {
-            this.setLocalCategories(json.categories);
+        if (json.success) {
+          // 1. Transaksi dari Google Spreadsheet
+          let finalTrx = localTrx;
+          if (Array.isArray(json.transactions)) {
+            finalTrx = json.transactions.map((t) => ({ ...t, syncedToSheets: true }));
+            this.setLocalTransactions(finalTrx);
           }
+
+          // 2. Kategori dari Google Spreadsheet
+          let finalCats = localCats;
+          if (Array.isArray(json.categories) && json.categories.length > 0) {
+            finalCats = json.categories;
+            this.setLocalCategories(finalCats);
+          }
+
+          // 3. Pengaturan Global Usaha & Nama Aplikasi dari sheet Pengaturan
+          let finalProfile = localProfile;
+          if (json.settings && typeof json.settings === 'object') {
+            finalProfile = {
+              appName: json.settings.app_name?.trim() || localProfile.appName || DEFAULT_BUSINESS_PROFILE.appName,
+              businessName: json.settings.business_name?.trim() || localProfile.businessName || DEFAULT_BUSINESS_PROFILE.businessName,
+              address: json.settings.business_address?.trim() || localProfile.address || DEFAULT_BUSINESS_PROFILE.address,
+              trucks: json.settings.business_trucks?.trim() || localProfile.trucks || DEFAULT_BUSINESS_PROFILE.trucks,
+              phone: json.settings.business_phone?.trim() || localProfile.phone || DEFAULT_BUSINESS_PROFILE.phone,
+            };
+            this.setLocalBusinessProfile(finalProfile);
+          }
+
           return {
-            transactions: json.transactions,
-            categories: json.categories || localCats,
+            transactions: finalTrx,
+            categories: finalCats,
+            settings: finalProfile,
             fromSpreadsheet: true,
           };
         }
@@ -275,16 +386,19 @@ export class AppApiService {
       return {
         transactions: localTrx,
         categories: localCats,
+        settings: localProfile,
         fromSpreadsheet: false,
-        error: 'Respons Spreadsheet tidak sesuai, menggunakan data lokal.',
+        error: 'Respons Spreadsheet tidak valid. Menampilkan data lokal cadangan.',
       };
     } catch (err: unknown) {
-      console.warn('Apps Script sync fetch error:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('Apps Script sync fetch error:', errMsg);
       return {
         transactions: localTrx,
         categories: localCats,
+        settings: localProfile,
         fromSpreadsheet: false,
-        error: 'Koneksi Google Spreadsheet sedang offline, menggunakan data lokal tersimpan.',
+        error: `Koneksi Google Spreadsheet sedang offline atau terputus (${errMsg}).`,
       };
     }
   }

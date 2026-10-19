@@ -104,8 +104,9 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   const handleDownloadPdf = () => {
     setIsExportingPdf(true);
     try {
-      const companyName = businessProfile?.businessName || businessProfile?.appName || 'TIRTA KEUANGAN (Tangki Air)';
-      exportMonthlyPdf(recap, companyName);
+      const companyName = businessProfile?.businessName || "Al I'tisham Droping";
+      const appName = businessProfile?.appName || 'TIRTA KEUANGAN';
+      exportMonthlyPdf(recap, companyName, appName);
     } catch (err) {
       alert('Gagal membuat PDF: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
@@ -117,8 +118,9 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   const handleDownloadCsv = () => {
     setIsExportingCsv(true);
     try {
-      const companyName = businessProfile?.businessName || businessProfile?.appName || 'TIRTA KEUANGAN';
-      exportMonthlyCsv(recap, companyName);
+      const companyName = businessProfile?.businessName || "Al I'tisham Droping";
+      const appName = businessProfile?.appName || 'TIRTA KEUANGAN';
+      exportMonthlyCsv(recap, companyName, appName);
     } catch (err) {
       alert('Gagal membuat CSV: ' + (err instanceof Error ? err.message : String(err)));
     } finally {

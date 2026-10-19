@@ -27,6 +27,7 @@ export default function App() {
   );
   const [isSheetsConnected, setIsSheetsConnected] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Modals
@@ -55,21 +56,40 @@ export default function App() {
     }, 3500);
   }, []);
 
-  // Fetch initial data
-  const loadData = useCallback(async () => {
+  // Fetch initial data: Google Spreadsheet via Apps Script adalah single source of truth
+  const loadData = useCallback(async (isManualTrigger = false) => {
     setIsSyncing(true);
+    setSyncError(null);
     try {
       const result = await AppApiService.fetchAllData();
       setTransactions(result.transactions);
       setCategories(result.categories);
-      setIsSheetsConnected(result.fromSpreadsheet);
-      if (result.error && !result.fromSpreadsheet && AppApiService.getAppsScriptUrl()) {
-        showToast(result.error);
+      if (result.settings) {
+        setBusinessProfile(result.settings);
       }
-    } catch {
-      // Local fallback
+      setIsSheetsConnected(result.fromSpreadsheet);
+
+      if (result.fromSpreadsheet) {
+        setSyncError(null);
+        if (isManualTrigger) {
+          showToast('Sinkronisasi berhasil! Data terbaru telah dimuat dari Google Spreadsheet.');
+        }
+      } else {
+        const errText = result.error || 'Gagal sinkronisasi data dengan Google Spreadsheet.';
+        setSyncError(errText);
+        if (isManualTrigger || AppApiService.getAppsScriptUrl()) {
+          showToast(errText);
+        }
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setSyncError(errMsg);
+      setIsSheetsConnected(false);
       setTransactions(AppApiService.getLocalTransactions());
       setCategories(AppApiService.getLocalCategories());
+      if (isManualTrigger) {
+        showToast(`Sinkronisasi gagal: ${errMsg}`);
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -106,6 +126,8 @@ export default function App() {
           prev.map((item) => (item.id === trx.id ? (res.transaction || (trx as Transaction)) : item))
         );
         showToast('Transaksi berhasil diperbarui!');
+        // Refresh server data to guarantee cross-device consistency
+        loadData();
       } else {
         alert(res.message);
       }
@@ -115,6 +137,8 @@ export default function App() {
       if (res.success && res.transaction) {
         setTransactions((prev) => [res.transaction!, ...prev]);
         showToast('Transaksi baru berhasil dicatat!');
+        // Refresh server data to guarantee cross-device consistency
+        loadData();
       } else {
         alert(res.message);
       }
@@ -130,6 +154,8 @@ export default function App() {
         setTransactions((prev) => prev.filter((item) => item.id !== deleteTarget.id));
         showToast('Transaksi berhasil dihapus.');
         setDeleteTarget(null);
+        // Refresh server data
+        loadData();
       } else {
         alert(res.message);
       }
@@ -147,6 +173,7 @@ export default function App() {
     if (res.success && res.category) {
       setCategories((prev) => [...prev, res.category!]);
       showToast('Kategori baru berhasil ditambahkan!');
+      loadData();
     } else {
       alert(res.message);
     }
@@ -158,39 +185,46 @@ export default function App() {
     if (res.success) {
       setCategories((prev) => prev.filter((c) => c.id !== catId));
       showToast('Kategori berhasil dihapus.');
+      loadData();
     } else {
       alert(res.message);
     }
   };
 
-  // Business Profile Settings Handler
-  const handleSaveBusinessProfile = (newProfile: BusinessProfile) => {
-    const res = AppApiService.setBusinessProfile(newProfile, currentUser);
-    if (res.success) {
-      setBusinessProfile(newProfile);
-      showToast('Pengaturan nama aplikasi & profil usaha berhasil disimpan!');
-    } else {
-      alert(res.message);
+  // Business Profile Settings Handler: Simpan ke sheet Pengaturan via Apps Script
+  const handleSaveBusinessProfile = async (
+    newProfile: BusinessProfile
+  ): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser) {
+      return { success: false, message: 'Harap masuk terlebih dahulu.' };
     }
-  };
-
-  // Manual Sync trigger
-  const handleSyncNow = async () => {
-    if (!currentUser) return;
     setIsSyncing(true);
     try {
-      if (currentUser.role === 'admin') {
-        const syncRes = await AppApiService.syncAllToSpreadsheet(currentUser);
-        if (syncRes.success) {
-          showToast(syncRes.message);
+      const res = await AppApiService.saveBusinessProfile(newProfile, currentUser);
+      if (res.success) {
+        if (res.profile) {
+          setBusinessProfile(res.profile);
+        } else {
+          setBusinessProfile(newProfile);
         }
+        showToast(res.message);
+        // Refresh dari server untuk memastikan sinkronisasi lintas perangkat
+        await loadData(false);
+        return { success: true, message: res.message };
+      } else {
+        return { success: false, message: res.message };
       }
-      await loadData();
     } catch (err) {
-      showToast('Sinkronisasi gagal: ' + (err instanceof Error ? err.message : String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, message: 'Gagal menyimpan ke Google Spreadsheet: ' + msg };
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  // Manual Sync trigger: Mengambil ulang data aktual dari server
+  const handleSyncNow = async () => {
+    await loadData(true);
   };
 
   // If not logged in, render Login Page
@@ -236,6 +270,7 @@ export default function App() {
           onOpenInstallModal={() => setIsInstallModalOpen(true)}
           isSyncing={isSyncing}
           onSyncNow={handleSyncNow}
+          syncError={syncError}
           activePage={activePage}
         />
 
@@ -252,6 +287,9 @@ export default function App() {
                   setIsAddEditModalOpen(true);
                 }}
                 isSheetsConnected={isSheetsConnected}
+                isSyncing={isSyncing}
+                onSyncNow={handleSyncNow}
+                syncError={syncError}
               />
             )}
 
