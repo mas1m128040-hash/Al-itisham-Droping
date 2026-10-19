@@ -1,0 +1,6 @@
+{
+  "name": "Manajemen Keuangan Tangki Air",
+  "description": "Aplikasi manajemen keuangan profesional untuk usaha penjualan air tangki, terintegrasi dengan Google Spreadsheet dan Google Apps Script.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
