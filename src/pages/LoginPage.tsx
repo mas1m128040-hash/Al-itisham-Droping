@@ -16,9 +16,10 @@ import { User } from '../types';
 
 interface LoginPageProps {
   onLoginSuccess: (user: User) => void;
+  appName?: string;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, appName = 'TIRTA KEUANGAN' }) => {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('admin123');
   const [isLoading, setIsLoading] = useState(false);
@@ -99,7 +100,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             <Droplets className="w-8 h-8" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            TIRTA KEUANGAN
+            {appName}
           </h1>
           <p className="text-sm text-cyan-200/80 mt-1">
             Manajemen Keuangan & Operasional Tangki Air

@@ -1,6 +1,6 @@
 import { Transaction, MonthlyRecap } from '../types';
 
-export function exportMonthlyCsv(recap: MonthlyRecap): void {
+export function exportMonthlyCsv(recap: MonthlyRecap, businessName: string = 'TIRTA KEUANGAN'): void {
   const headers = [
     'ID Transaksi',
     'Tanggal',
@@ -29,7 +29,7 @@ export function exportMonthlyCsv(recap: MonthlyRecap): void {
 
   // Summary lines at top
   const summaryLines = [
-    `"LAPORAN KEUANGAN USAHA PENJUALAN AIR TANGKI"`,
+    `"LAPORAN KEUANGAN USAHA PENJUALAN AIR TANGKI - ${businessName.replace(/"/g, '""')}"`,
     `"Periode:","${recap.monthName} ${recap.year}"`,
     `"Total Pemasukan:",${recap.totalIncome}`,
     `"Total Pengeluaran:",${recap.totalExpense}`,

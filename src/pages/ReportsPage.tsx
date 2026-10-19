@@ -9,7 +9,7 @@ import {
   ExternalLink,
   TableProperties,
 } from 'lucide-react';
-import { Transaction, Category, User, MonthlyRecap } from '../types';
+import { Transaction, Category, User, MonthlyRecap, BusinessProfile } from '../types';
 import {
   formatRupiah,
   formatDateIndo,
@@ -24,11 +24,13 @@ interface ReportsPageProps {
   transactions: Transaction[];
   categories: Category[];
   currentUser: User | null;
+  businessProfile?: BusinessProfile;
 }
 
 export const ReportsPage: React.FC<ReportsPageProps> = ({
   transactions,
   categories,
+  businessProfile,
 }) => {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
@@ -102,7 +104,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   const handleDownloadPdf = () => {
     setIsExportingPdf(true);
     try {
-      exportMonthlyPdf(recap, 'TIRTA KEUANGAN (Tangki Air)');
+      const companyName = businessProfile?.businessName || businessProfile?.appName || 'TIRTA KEUANGAN (Tangki Air)';
+      exportMonthlyPdf(recap, companyName);
     } catch (err) {
       alert('Gagal membuat PDF: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
@@ -114,7 +117,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   const handleDownloadCsv = () => {
     setIsExportingCsv(true);
     try {
-      exportMonthlyCsv(recap);
+      const companyName = businessProfile?.businessName || businessProfile?.appName || 'TIRTA KEUANGAN';
+      exportMonthlyCsv(recap, companyName);
     } catch (err) {
       alert('Gagal membuat CSV: ' + (err instanceof Error ? err.message : String(err)));
     } finally {

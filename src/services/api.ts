@@ -1,9 +1,18 @@
-import { Category, Transaction, User } from '../types';
+import { Category, Transaction, User, BusinessProfile } from '../types';
 import { DEFAULT_CATEGORIES, INITIAL_TRANSACTIONS } from '../utils/defaultData';
 
 const STORAGE_TRANSACTIONS = 'tangki_air_transactions_v1';
 const STORAGE_CATEGORIES = 'tangki_air_categories_v1';
 const STORAGE_CONFIG = 'tangki_air_gas_config_v1';
+const STORAGE_BUSINESS_PROFILE = 'tangki_air_business_profile_v1';
+
+export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
+  appName: 'TIRTA KEUANGAN',
+  businessName: 'CV. Tirta Lancar Abadi (Tangki Air)',
+  address: 'Jl. Raya Sumber Mata Air No. 45, Bogor',
+  trucks: 'B 9182 TGA (8.000 L), B 9234 TAB (5.000 L), B 9801 XYZ (16.000 L)',
+  phone: '0812-3456-7890',
+};
 
 export interface GasApiResponse<T = unknown> {
   success: boolean;
@@ -78,6 +87,45 @@ export class AppApiService {
 
   public static setLocalCategories(categories: Category[]): void {
     localStorage.setItem(STORAGE_CATEGORIES, JSON.stringify(categories));
+  }
+
+  public static getBusinessProfile(): BusinessProfile {
+    try {
+      const data = localStorage.getItem(STORAGE_BUSINESS_PROFILE);
+      if (!data) return DEFAULT_BUSINESS_PROFILE;
+      const parsed = JSON.parse(data);
+      return {
+        ...DEFAULT_BUSINESS_PROFILE,
+        ...parsed,
+        appName: parsed.appName?.trim() || DEFAULT_BUSINESS_PROFILE.appName,
+      };
+    } catch {
+      return DEFAULT_BUSINESS_PROFILE;
+    }
+  }
+
+  public static setBusinessProfile(
+    profile: BusinessProfile,
+    currentUser?: User | null
+  ): { success: boolean; message: string } {
+    if (currentUser && currentUser.role !== 'admin') {
+      return {
+        success: false,
+        message: 'Akses Ditolak: Hanya Admin yang dapat memperbarui pengaturan profil usaha.',
+      };
+    }
+    try {
+      localStorage.setItem(STORAGE_BUSINESS_PROFILE, JSON.stringify(profile));
+      return {
+        success: true,
+        message: 'Pengaturan profil usaha dan nama aplikasi berhasil disimpan!',
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: 'Gagal menyimpan profil: ' + (err instanceof Error ? err.message : String(err)),
+      };
+    }
   }
 
   /**

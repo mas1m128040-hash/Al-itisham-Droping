@@ -81,4 +81,13 @@ export interface SpreadsheetConfig {
   isConnected: boolean;
 }
 
+export interface BusinessProfile {
+  appName: string;
+  businessName: string;
+  address: string;
+  trucks: string;
+  phone?: string;
+}
+
 export type ActivePage = 'dashboard' | 'transactions' | 'reports' | 'settings';
+

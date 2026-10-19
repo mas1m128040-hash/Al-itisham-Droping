@@ -20,6 +20,7 @@ interface TransactionModalProps {
   transactionToEdit?: Transaction | null;
   categories: Category[];
   currentUser: User | null;
+  trucksList?: string;
 }
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
@@ -29,6 +30,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   transactionToEdit,
   categories,
   currentUser,
+  trucksList,
 }) => {
   const isEditing = Boolean(transactionToEdit);
   const isAdmin = currentUser?.role === 'admin';
@@ -321,6 +323,38 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     onChange={(e) => setVehiclePlate(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs uppercase"
                   />
+                  {trucksList && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {trucksList
+                        .split(',')
+                        .map((t) => t.trim())
+                        .filter(Boolean)
+                        .map((truck) => (
+                          <button
+                            key={truck}
+                            type="button"
+                            onClick={() => {
+                              // Extract plate and volume if formatted like "B 9182 TGA (8.000 L)"
+                              const matchPlate = truck.match(/^([^(]+)/);
+                              if (matchPlate) {
+                                setVehiclePlate(matchPlate[1].trim());
+                              } else {
+                                setVehiclePlate(truck);
+                              }
+                              const matchVol = truck.match(/(\d+[\d.]*)\s*L/i);
+                              if (matchVol) {
+                                const cleanVol = matchVol[1].replace(/\./g, '');
+                                setVolumeLiters(cleanVol);
+                              }
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200 hover:bg-cyan-50 hover:border-cyan-300 hover:text-cyan-800 transition"
+                            title="Pilih armada ini"
+                          >
+                            {truck}
+                          </button>
+                        ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>

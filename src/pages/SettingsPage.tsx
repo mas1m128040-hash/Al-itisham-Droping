@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   TableProperties,
   CheckCircle2,
@@ -15,9 +15,14 @@ import {
   Plus,
   Trash2,
   Lock,
+  Save,
+  Download,
+  Smartphone,
+  Sparkles,
 } from 'lucide-react';
 import { AppApiService } from '../services/api';
-import { Category, User } from '../types';
+import { Category, User, BusinessProfile } from '../types';
+import { PWAInstallButton } from '../components/PWAInstallButton';
 
 interface SettingsPageProps {
   currentUser: User | null;
@@ -27,6 +32,9 @@ interface SettingsPageProps {
   onOpenGuideModal: () => void;
   onSyncSuccess: () => void;
   isSheetsConnected: boolean;
+  businessProfile: BusinessProfile;
+  onSaveBusinessProfile: (profile: BusinessProfile) => void;
+  onOpenInstallModal?: () => void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
@@ -37,8 +45,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onOpenGuideModal,
   onSyncSuccess,
   isSheetsConnected,
+  businessProfile,
+  onSaveBusinessProfile,
+  onOpenInstallModal,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
+
+  // Spreadsheet state
   const [gasUrl, setGasUrl] = useState(AppApiService.getAppsScriptUrl());
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -48,10 +61,53 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     title?: string;
   } | null>(null);
 
-  const [businessName, setBusinessName] = useState('CV. Tirta Lancar Abadi (Tangki Air)');
-  const [businessAddress, setBusinessAddress] = useState('Jl. Raya Sumber Mata Air No. 45, Bogor');
-  const [trucks, setTrucks] = useState('B 9182 TGA (8.000 L), B 9234 TAB (5.000 L), B 9801 XYZ (16.000 L)');
+  // Business profile form state
+  const [appName, setAppName] = useState(businessProfile.appName);
+  const [businessName, setBusinessName] = useState(businessProfile.businessName);
+  const [businessAddress, setBusinessAddress] = useState(businessProfile.address);
+  const [trucks, setTrucks] = useState(businessProfile.trucks);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState<string | null>(null);
 
+  // Sync state if businessProfile prop changes
+  useEffect(() => {
+    setAppName(businessProfile.appName);
+    setBusinessName(businessProfile.businessName);
+    setBusinessAddress(businessProfile.address);
+    setTrucks(businessProfile.trucks);
+  }, [businessProfile]);
+
+  // Handle saving business profile
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) {
+      alert('Akses Ditolak: Hanya Admin yang berhak menyimpan perubahan pengaturan profil usaha.');
+      return;
+    }
+
+    if (!appName.trim()) {
+      alert('Nama aplikasi tidak boleh kosong.');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    const updatedProfile: BusinessProfile = {
+      appName: appName.trim(),
+      businessName: businessName.trim() || 'TIRTA KEUANGAN',
+      address: businessAddress.trim(),
+      trucks: trucks.trim(),
+    };
+
+    onSaveBusinessProfile(updatedProfile);
+    setProfileSaveSuccess('Pengaturan nama aplikasi dan profil usaha berhasil disimpan!');
+    setIsSavingProfile(false);
+
+    setTimeout(() => {
+      setProfileSaveSuccess(null);
+    }, 4000);
+  };
+
+  // Handle testing GAS connection
   const handleTest = async () => {
     setIsTesting(true);
     setTestResult(null);
@@ -71,6 +127,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
+  // Handle saving URL and triggering sync
   const handleSaveAndSync = async () => {
     if (!isAdmin) {
       alert('Akses Ditolak: Hanya Admin yang dapat memperbarui pengaturan.');
@@ -97,15 +154,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto pb-16 md:pb-8">
+    <div className="space-y-4 max-w-4xl mx-auto pb-6">
       {/* Top Banner */}
-      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-base sm:text-lg font-extrabold text-slate-800">
-            Pengaturan & Integrasi
+            Pengaturan Usaha & Integrasi
           </h2>
           <p className="text-xs text-slate-500">
-            Google Spreadsheet, Kategori Usaha & Hak Akses
+            Nama Aplikasi, Profil Usaha Tangki Air, Google Spreadsheet & Kategori
           </p>
         </div>
 
@@ -119,10 +176,139 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </button>
       </div>
 
-      {/* 1. Google Spreadsheet & Apps Script Configuration Card */}
-      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <div className="flex items-center gap-2">
+      {/* 1. Pengaturan Nama Aplikasi & Profil Usaha (Dengan Tombol Simpan Jelas) */}
+      <div className="bg-white p-3.5 sm:p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-600 to-sky-500 text-white flex items-center justify-center shadow-xs">
+              <Building className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
+                Pengaturan Nama Aplikasi & Profil Usaha
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Sesuaikan nama tampilan aplikasi dan informasi usaha untuk kop laporan
+              </p>
+            </div>
+          </div>
+
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              isAdmin
+                ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
+                : 'bg-slate-100 text-slate-600 border border-slate-200'
+            }`}
+          >
+            {isAdmin ? 'Mode Edit Admin' : 'Hanya Lihat'}
+          </span>
+        </div>
+
+        <form onSubmit={handleSaveProfile} className="space-y-3.5 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* Nama Tampilan Aplikasi */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Nama Tampilan Aplikasi <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                disabled={!isAdmin}
+                value={appName}
+                onChange={(e) => setAppName(e.target.value)}
+                placeholder="Contoh: TIRTA KEUANGAN"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
+                required
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Tampil di judul header navigasi, menu samping, dan tab browser.
+              </p>
+            </div>
+
+            {/* Nama Resmi Perusahaan / Usaha Air */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Nama Usaha / Perusahaan Lengkap
+              </label>
+              <input
+                type="text"
+                disabled={!isAdmin}
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="Contoh: CV. Tirta Lancar Abadi (Tangki Air)"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Dicetak pada kop surat Laporan PDF dan file ekspor CSV.
+              </p>
+            </div>
+
+            {/* Alamat Depo / Pangkalan */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Alamat Depo / Sumber Mata Air
+              </label>
+              <input
+                type="text"
+                disabled={!isAdmin}
+                value={businessAddress}
+                onChange={(e) => setBusinessAddress(e.target.value)}
+                placeholder="Contoh: Jl. Raya Sumber Air No. 45, Bogor"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Alamat pangkalan atau sumber pengisian tangki air.
+              </p>
+            </div>
+
+            {/* Daftar Armada Truk Tangki */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                <Truck className="w-3.5 h-3.5 text-cyan-600" />
+                <span>Daftar Armada Truk Tangki</span>
+              </label>
+              <input
+                type="text"
+                disabled={!isAdmin}
+                value={trucks}
+                onChange={(e) => setTrucks(e.target.value)}
+                placeholder="Contoh: B 9182 TGA (8.000 L), B 9234 TAB (5.000 L)"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Pisahkan dengan koma untuk pilihan cepat saat input transaksi.
+              </p>
+            </div>
+          </div>
+
+          {/* Feedback Banner on Profile Save */}
+          {profileSaveSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="font-semibold">{profileSaveSuccess}</span>
+            </div>
+          )}
+
+          {/* Tombol Simpan Pengaturan Usaha */}
+          {isAdmin && (
+            <div className="pt-2 flex items-center justify-end">
+              <button
+                type="submit"
+                disabled={isSavingProfile}
+                className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white rounded-xl text-xs font-bold shadow-md shadow-cyan-600/20 flex items-center gap-2 transition active:scale-95 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>Simpan Pengaturan Usaha</span>
+              </button>
+            </div>
+          )}
+        </form>
+      </div>
+
+      {/* 2. Google Spreadsheet & Apps Script Configuration Card */}
+      <div className="bg-white p-3.5 sm:p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3.5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
               <TableProperties className="w-4 h-4" />
             </div>
@@ -137,16 +323,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
 
           <span
-            className={`text-[11px] px-2 py-0.5 rounded-full font-bold border flex items-center gap-1 ${
+            className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold border flex items-center gap-1 ${
               isSheetsConnected
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-amber-50 text-amber-700 border-amber-200'
             }`}
           >
             {isSheetsConnected ? (
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
             ) : (
-              <AlertCircle className="w-3 h-3 text-amber-600" />
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
             )}
             <span>{isSheetsConnected ? 'Terkoneksi' : 'Offline / Lokal'}</span>
           </span>
@@ -173,9 +359,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             type="button"
             onClick={handleTest}
             disabled={isTesting || !gasUrl.trim()}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50"
+            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50"
           >
-            <RefreshCw className={`w-3 h-3 ${isTesting ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
             <span>{isTesting ? 'Menguji...' : 'Tes Koneksi'}</span>
           </button>
 
@@ -184,16 +370,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               type="button"
               onClick={handleSaveAndSync}
               disabled={isSyncing || !gasUrl.trim()}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50"
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50"
             >
               {isSyncing ? (
                 <>
-                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   <span>Menyinkronkan...</span>
                 </>
               ) : (
                 <>
-                  <Send className="w-3 h-3" />
+                  <Send className="w-3.5 h-3.5" />
                   <span>Simpan & Sinkronkan</span>
                 </>
               )}
@@ -204,7 +390,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         {/* Test Result Message */}
         {testResult && (
           <div
-            className={`p-2.5 rounded-lg border flex items-start gap-2 text-xs animate-in fade-in ${
+            className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs animate-in fade-in ${
               testResult.success
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                 : 'bg-rose-50 border-rose-200 text-rose-800'
@@ -227,10 +413,51 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         )}
       </div>
 
-      {/* 2. Kelola Kategori Keuangan Usaha Tangki Air */}
-      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <div className="flex items-center gap-2">
+      {/* 3. PWA & Pemasangan Aplikasi di Chrome */}
+      <div className="bg-white p-3.5 sm:p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-sky-600 text-white flex items-center justify-center">
+              <Download className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
+                Instalasi Aplikasi di Chrome (PWA)
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Dapat dipasang di layar utama HP Android, iPhone, dan Komputer
+              </p>
+            </div>
+          </div>
+
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-sky-600" />
+            <span>PWA Ready</span>
+          </span>
+        </div>
+
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Aplikasi ini mendukung Progressive Web App (PWA). Anda dapat memasangnya langsung melalui
+          Google Chrome tanpa perlu unduh dari Play Store, sehingga hemat memori dan bisa dibuka layaknya
+          aplikasi native.
+        </p>
+
+        <div className="pt-1 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onOpenInstallModal}
+            className="px-4 py-2 bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-2 transition"
+          >
+            <Download className="w-4 h-4" />
+            <span>Buka Petunjuk / Pasang Aplikasi</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 4. Kelola Kategori Keuangan Usaha Tangki Air */}
+      <div className="bg-white p-3.5 sm:p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3.5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-cyan-600 text-white flex items-center justify-center">
               <Tag className="w-4 h-4" />
             </div>
@@ -257,10 +484,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
 
         {/* Category List Pills */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block mb-1">
-              Pemasukan:
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block mb-1.5">
+              Pemasukan (Income):
             </span>
             <div className="flex flex-wrap gap-1.5">
               {categories
@@ -268,15 +495,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 .map((cat) => (
                   <span
                     key={cat.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold"
                   >
                     <span
-                      className="w-1.5 h-1.5 rounded-full"
+                      className="w-2 h-2 rounded-full"
                       style={{ backgroundColor: cat.color }}
                     />
                     <span>{cat.name}</span>
                     {cat.isSystem ? (
-                      <Lock className="w-2.5 h-2.5 text-slate-400 ml-0.5" />
+                      <span title="Kategori Sistem Baku">
+                        <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                      </span>
                     ) : (
                       isAdmin && (
                         <button
@@ -287,8 +516,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                             }
                           }}
                           className="hover:text-rose-600 ml-0.5"
+                          title="Hapus Kategori"
                         >
-                          <Trash2 className="w-2.5 h-2.5" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       )
                     )}
@@ -298,8 +528,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
 
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 block mb-1">
-              Pengeluaran:
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 block mb-1.5">
+              Pengeluaran (Expense):
             </span>
             <div className="flex flex-wrap gap-1.5">
               {categories
@@ -307,15 +537,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 .map((cat) => (
                   <span
                     key={cat.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-800 border border-rose-200 text-xs font-semibold"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 text-rose-800 border border-rose-200 text-xs font-semibold"
                   >
                     <span
-                      className="w-1.5 h-1.5 rounded-full"
+                      className="w-2 h-2 rounded-full"
                       style={{ backgroundColor: cat.color }}
                     />
                     <span>{cat.name}</span>
                     {cat.isSystem ? (
-                      <Lock className="w-2.5 h-2.5 text-slate-400 ml-0.5" />
+                      <span title="Kategori Sistem Baku">
+                        <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                      </span>
                     ) : (
                       isAdmin && (
                         <button
@@ -326,8 +558,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                             }
                           }}
                           className="hover:text-rose-600 ml-0.5"
+                          title="Hapus Kategori"
                         >
-                          <Trash2 className="w-2.5 h-2.5" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       )
                     )}
@@ -338,86 +571,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </div>
 
-      {/* 3. Profil Usaha & Armada */}
-      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-          <Building className="w-4 h-4 text-cyan-600" />
-          <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
-            Profil Usaha & Armada Tangki Air
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-          <div>
-            <label className="block font-bold text-slate-700 mb-0.5">
-              Nama Usaha / Usaha Air
-            </label>
-            <input
-              type="text"
-              disabled={!isAdmin}
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 disabled:opacity-60"
-            />
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-0.5">
-              Alamat Depo / Mata Air
-            </label>
-            <input
-              type="text"
-              disabled={!isAdmin}
-              value={businessAddress}
-              onChange={(e) => setBusinessAddress(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 disabled:opacity-60"
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="block font-bold text-slate-700 mb-0.5 flex items-center gap-1">
-              <Truck className="w-3 h-3 text-cyan-600" />
-              <span>Daftar Armada Truk Tangki</span>
-            </label>
-            <input
-              type="text"
-              disabled={!isAdmin}
-              value={trucks}
-              onChange={(e) => setTrucks(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 disabled:opacity-60"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Hak Akses Pengguna */}
-      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+      {/* 5. Hak Akses Pengguna */}
+      <div className="bg-white p-3.5 sm:p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
           <KeyRound className="w-4 h-4 text-cyan-600" />
           <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
             Status Akun & Hak Akses
           </h3>
         </div>
 
-        <div className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-lg">
+        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
           <div
-            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
               isAdmin ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-200 text-slate-700'
             }`}
           >
-            {isAdmin ? <ShieldCheck className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {isAdmin ? <ShieldCheck className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-slate-800 text-xs">{currentUser?.name}</span>
-              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-cyan-100 text-cyan-800">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm">
+                {currentUser?.name}
+              </span>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800">
                 {currentUser?.role}
               </span>
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {isAdmin
-                ? 'Hak Akses Admin: Menambah, mengubah, menghapus transaksi, dan mengunduh laporan.'
-                : 'Hak Akses Viewer: Hanya dapat melihat dashboard dan laporan (tanpa hak edit).'}
+                ? 'Hak Akses Admin: Menambah, mengubah, menghapus transaksi, mengelola kategori, dan mengunduh laporan.'
+                : 'Hak Akses Viewer: Hanya dapat melihat dashboard dan laporan (tanpa hak edit atau hapus).'}
             </p>
           </div>
         </div>
