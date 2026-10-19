@@ -28,40 +28,136 @@ export interface GasApiResponse<T = unknown> {
   serverTime?: string;
 }
 
-// Default URL dari environment variable (Vite / Vercel build: VITE_APPS_SCRIPT_URL)
-export const PROJECT_DEFAULT_APPS_SCRIPT_URL =
-  ((import.meta as unknown as { env: Record<string, string> }).env?.VITE_APPS_SCRIPT_URL || '').trim();
+// Baca variabel environment Vite dengan sintaks standar (agar di-inline otomatis saat build di Vercel)
+const ENV_APPS_SCRIPT_URL = (import.meta.env.VITE_APPS_SCRIPT_URL || '').trim();
+
+
+/**
+ * Menormalkan kategori dari Apps Script. Jika backend lama salah mengirim
+ * nama kategori berupa "income"/"expense", gunakan kategori cadangan yang valid
+ * agar form tetap dapat dipakai sampai deployment Apps Script diperbarui.
+ */
+function normalizeCategories(rawCategories: unknown, fallback: Category[]): Category[] {
+  if (!Array.isArray(rawCategories)) return fallback;
+
+  const normalized: Category[] = rawCategories
+    .map((raw: any, index: number) => {
+      const rawType = String(raw?.type ?? raw?.Jenis ?? raw?.jenis ?? '').trim().toLowerCase();
+      const type =
+        ['income', 'pemasukan'].includes(rawType) ? 'income' :
+        ['expense', 'pengeluaran'].includes(rawType) ? 'expense' : null;
+      const name = String(
+        raw?.name ?? raw?.Nama_Kategori ?? raw?.nama_kategori ?? raw?.categoryName ?? ''
+      ).trim();
+
+      // Nama seperti "income"/"expense" menandakan data kategori salah dipetakan.
+      if (!type || !name || ['income', 'expense', 'pemasukan', 'pengeluaran'].includes(name.toLowerCase())) {
+        return null;
+      }
+
+      return {
+        id: String(raw?.id ?? raw?.ID ?? `category-${index}`),
+        type,
+        name,
+        color: String(raw?.color ?? raw?.Warna ?? '#0284c7'),
+        icon: String(raw?.icon ?? raw?.Ikon ?? 'Tag'),
+        isSystem: raw?.isSystem === true || String(raw?.Is_System ?? '').toLowerCase() === 'true',
+      } as Category;
+    })
+    .filter((category): category is Category => category !== null);
+
+  // Jika salah satu jenis sama sekali tidak valid, isi dengan kategori default
+  // untuk jenis tersebut. Kategori valid dari Spreadsheet tetap dipertahankan.
+  const result = [...normalized];
+  (['income', 'expense'] as const).forEach((type) => {
+    if (!result.some((category) => category.type === type)) {
+      result.push(...fallback.filter((category) => category.type === type));
+    }
+  });
+
+  return result;
+}
+
+/**
+ * URL Web App Google Apps Script Default (Konfigurasi Cadangan Tertanam di Frontend).
+ * Berlaku otomatis untuk seluruh perangkat (Laptop, HP, Tablet) tanpa memerlukan input manual.
+ * Wajib berakhiran /exec: https://script.google.com/macros/s/.../exec
+ */
+export const EMBEDDED_APPS_SCRIPT_URL: string = '';
+
+export const PROJECT_DEFAULT_APPS_SCRIPT_URL: string = (
+  ENV_APPS_SCRIPT_URL ||
+  EMBEDDED_APPS_SCRIPT_URL ||
+  ''
+).trim();
 
 export class AppApiService {
   /**
    * Mengambil URL Google Apps Script yang aktif.
-   * Prioritas:
-   * 1. Jika ada URL kustom yang VALID di localStorage (diawali https://script.google.com/macros/s/), gunakan.
-   * 2. Jika di localStorage kosong/rusak/tidak valid, WAJIB menggunakan PROJECT_DEFAULT_APPS_SCRIPT_URL.
-   * 3. LocalStorage kosong TIDAK PERNAH menimpa konfigurasi default proyek!
+   *
+   * Prioritas & Sinkronisasi Lintas Perangkat:
+   * 1. Jika konfigurasi default proyek (VITE_APPS_SCRIPT_URL atau EMBEDDED_APPS_SCRIPT_URL)
+   *    valid dan berakhiran /exec, URL ini menjadi sumber default utama untuk SEMUA perangkat (Laptop & HP).
+   * 2. Jika localStorage memiliki nilai kustom yang VALID dan BERBEDA (misal admin mengubah URL di menu Pengaturan),
+   *    maka nilai kustom tersebut yang digunakan.
+   * 3. Jika localStorage kosong atau nilainya tidak valid (misal berisi /dev atau teks rusak),
+   *    aplikasi otomatis memakai default proyek yang valid. Nilai kosong di localStorage HP
+   *    TIDAK PERNAH menimpa konfigurasi default proyek!
    */
   public static getAppsScriptUrl(): string {
+    const defaultUrl = PROJECT_DEFAULT_APPS_SCRIPT_URL.trim();
+    const isDefaultValid =
+      defaultUrl.startsWith('https://script.google.com/macros/s/') &&
+      !defaultUrl.includes('/dev') &&
+      (defaultUrl.endsWith('/exec') || defaultUrl.includes('/exec?'));
+
+    let storedUrl = '';
     const rawStorage = localStorage.getItem(STORAGE_CONFIG);
     if (rawStorage) {
       try {
         const parsed = JSON.parse(rawStorage);
-        const storedUrl = typeof parsed?.appsScriptUrl === 'string' ? parsed.appsScriptUrl.trim() : '';
-        if (storedUrl.startsWith('https://script.google.com/macros/s/')) {
-          return storedUrl;
+        if (typeof parsed?.appsScriptUrl === 'string') {
+          storedUrl = parsed.appsScriptUrl.trim();
         }
       } catch {
         // Abaikan parse error, gunakan default proyek
       }
     }
-    return PROJECT_DEFAULT_APPS_SCRIPT_URL;
+
+    const isStoredValid =
+      storedUrl.startsWith('https://script.google.com/macros/s/') &&
+      !storedUrl.includes('/dev') &&
+      (storedUrl.endsWith('/exec') || storedUrl.includes('/exec?'));
+
+    // 1. Jika ada URL kustom yang sengaja diatur dan valid di localStorage
+    if (isStoredValid && (!isDefaultValid || storedUrl !== defaultUrl)) {
+      return storedUrl;
+    }
+
+    // 2. Jika konfigurasi default proyek valid (dari Vercel ENV / Embedded), gunakan sebagai sumber utama
+    if (isDefaultValid) {
+      return defaultUrl;
+    }
+
+    // 3. Fallback
+    if (isStoredValid) {
+      return storedUrl;
+    }
+
+    return defaultUrl || storedUrl;
   }
 
   /**
-   * Cek apakah aplikasi sudah memiliki konfigurasi URL Apps Script yang valid
+   * Cek apakah aplikasi sudah memiliki konfigurasi URL Apps Script yang valid (/exec)
    */
   public static isConfigured(): boolean {
     const url = this.getAppsScriptUrl();
-    return !!url && url.startsWith('https://script.google.com/macros/s/');
+    return (
+      Boolean(url) &&
+      url.startsWith('https://script.google.com/macros/s/') &&
+      !url.includes('/dev') &&
+      (url.endsWith('/exec') || url.includes('/exec?'))
+    );
   }
 
   /**
@@ -368,7 +464,7 @@ export class AppApiService {
           // 2. Kategori dari Google Spreadsheet
           let finalCats = localCats;
           if (Array.isArray(json.categories) && json.categories.length > 0) {
-            finalCats = json.categories;
+            finalCats = normalizeCategories(json.categories, DEFAULT_CATEGORIES);
             this.setLocalCategories(finalCats);
           }
 

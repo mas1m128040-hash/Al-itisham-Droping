@@ -373,11 +373,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
               URL Web App Apps Script
             </label>
-            {AppApiService.isConfigured() && (
+            {isSheetsConnected ? (
               <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold border border-emerald-200">
-                Otomatis Default Aktif
+                Tersambung ke Spreadsheet
               </span>
-            )}
+            ) : AppApiService.isConfigured() ? (
+              <span className="text-[10px] text-sky-700 bg-sky-50 px-2 py-0.5 rounded font-semibold border border-sky-200">
+                URL Terpasang
+              </span>
+            ) : null}
           </div>
           <textarea
             rows={2}

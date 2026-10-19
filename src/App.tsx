@@ -384,6 +384,7 @@ export default function App() {
         currentUser={currentUser}
         onSyncSuccess={loadData}
         onOpenGuideModal={() => setIsGuideModalOpen(true)}
+        isSheetsConnected={isSheetsConnected}
       />
 
       <GuideModal

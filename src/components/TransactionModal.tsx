@@ -77,15 +77,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   // Adjust default category when type switches
   useEffect(() => {
     if (!transactionToEdit) {
+      // Ambil ulang kategori berdasarkan jenis transaksi yang sedang dipilih.
+      // Bergantung pada categories juga memastikan form menyesuaikan saat data
+      // kategori selesai dimuat dari Google Spreadsheet.
+      const matchingCategories = categories.filter((c) => c.type === type);
       if (type === 'income') {
-        const found = availableCategories.find((c) => c.name.toLowerCase().includes('penjualan'));
-        setCategory(found ? found.name : availableCategories[0]?.name || 'Penjualan air');
+        const found = matchingCategories.find((c) => c.name.toLowerCase().includes('penjualan'));
+        setCategory(found ? found.name : matchingCategories[0]?.name || '');
       } else {
-        const found = availableCategories.find((c) => c.name.toLowerCase().includes('solar') || c.name.toLowerCase().includes('bahan baku'));
-        setCategory(found ? found.name : availableCategories[0]?.name || 'Solar');
+        const found = matchingCategories.find((c) =>
+          c.name.toLowerCase().includes('solar') || c.name.toLowerCase().includes('bahan baku')
+        );
+        setCategory(found ? found.name : matchingCategories[0]?.name || '');
       }
     }
-  }, [type, transactionToEdit]);
+  }, [type, transactionToEdit, categories]);
 
   if (!isOpen) return null;
 
@@ -270,11 +276,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs sm:text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
             >
-              {availableCategories.map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
+              {availableCategories.length === 0 ? (
+                <option value="">Kategori untuk jenis ini belum tersedia</option>
+              ) : (
+                availableCategories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

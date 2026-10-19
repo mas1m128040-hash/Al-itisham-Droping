@@ -22,6 +22,7 @@ interface SpreadsheetModalProps {
   currentUser: User | null;
   onSyncSuccess: () => void;
   onOpenGuideModal: () => void;
+  isSheetsConnected?: boolean;
 }
 
 export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
@@ -30,6 +31,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
   currentUser,
   onSyncSuccess,
   onOpenGuideModal,
+  isSheetsConnected = false,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
   const [activeUrl, setActiveUrl] = useState('');
@@ -146,17 +148,30 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
 
         {/* Content */}
         <div className="p-5 space-y-4 text-xs">
-          {/* Status Automatic Connection Banner */}
-          {isConfigured ? (
+          {/* Status Connection Banner */}
+          {isSheetsConnected ? (
             <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-950 leading-relaxed space-y-1.5">
               <div className="flex items-center gap-2 font-bold text-emerald-900 text-xs sm:text-sm">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Backend Apps Script Siap & Terhubung Otomatis</span>
+                <span>Google Spreadsheet Terhubung (Aktif)</span>
               </div>
               <p className="text-emerald-800 text-[11px] leading-normal">
-                Aplikasi telah terhubung ke Google Apps Script tanpa perlu memasukkan URL secara manual setiap membuka di HP atau browser baru.
+                Koneksi berhasil diverifikasi. Data transaksi dan pengaturan disinkronkan secara langsung dengan Google Spreadsheet.
               </p>
               <div className="bg-white/90 px-3 py-1.5 rounded-lg border border-emerald-200 font-mono text-[10px] text-slate-600 break-all truncate">
+                {activeUrl}
+              </div>
+            </div>
+          ) : isConfigured ? (
+            <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl text-sky-950 leading-relaxed space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-sky-900 text-xs sm:text-sm">
+                <TableProperties className="w-4 h-4 text-sky-600 shrink-0" />
+                <span>URL Web App Terpasang (Belum Terverifikasi / Offline)</span>
+              </div>
+              <p className="text-sky-800 text-[11px] leading-normal">
+                URL backend telah tertanam di aplikasi. Jalankan <strong>Tes Koneksi</strong> di bawah untuk memverifikasi sambungan ke server.
+              </p>
+              <div className="bg-white/90 px-3 py-1.5 rounded-lg border border-sky-200 font-mono text-[10px] text-slate-600 break-all truncate">
                 {activeUrl}
               </div>
             </div>
