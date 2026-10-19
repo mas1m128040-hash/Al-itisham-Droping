@@ -32,6 +32,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   currentUser,
   onNavigate,
   onOpenAddModal,
+  isSheetsConnected,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
   const [filterMode, setFilterMode] = useState<SimpleFilter>('month');
@@ -138,6 +139,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <Calendar className="w-3 h-3 shrink-0" />
               <span>Periode</span>
             </button>
+          </div>
+
+          {/* Connection Status Pill */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-600">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isSheetsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+              }`}
+            />
+            <span>{isSheetsConnected ? 'Spreadsheet Terhubung' : 'Offline / Tersimpan Lokal'}</span>
           </div>
 
           {/* Quick Add Button on Desktop */}

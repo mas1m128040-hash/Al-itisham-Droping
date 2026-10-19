@@ -9,6 +9,9 @@ import {
   ShieldCheck,
   BookOpen,
   Send,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { AppApiService } from '../services/api';
 import { User } from '../types';
@@ -29,7 +32,9 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
   onOpenGuideModal,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
-  const [url, setUrl] = useState('');
+  const [activeUrl, setActiveUrl] = useState('');
+  const [customUrlInput, setCustomUrlInput] = useState('');
+  const [showAdvancedEdit, setShowAdvancedEdit] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -40,21 +45,37 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setUrl(AppApiService.getAppsScriptUrl());
+      const current = AppApiService.getAppsScriptUrl();
+      setActiveUrl(current);
+      setCustomUrlInput(current);
       setTestResult(null);
+      // Auto open input only if URL is not configured yet
+      setShowAdvancedEdit(!current);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const isConfigured = Boolean(activeUrl && activeUrl.startsWith('https://script.google.com/macros/s/'));
+
   const handleTestConnection = async () => {
+    const urlToTest = (showAdvancedEdit && customUrlInput.trim()) ? customUrlInput.trim() : activeUrl;
+    if (!urlToTest) {
+      setTestResult({
+        success: false,
+        message: 'URL Google Apps Script belum tersedia. Masukkan URL Web App terlebih dahulu.',
+      });
+      return;
+    }
+
     setIsTesting(true);
     setTestResult(null);
     try {
-      const res = await AppApiService.testConnection(url);
+      const res = await AppApiService.testConnection(urlToTest);
       setTestResult(res);
-      if (res.success && isAdmin) {
-        AppApiService.setAppsScriptUrl(url);
+      if (res.success && isAdmin && showAdvancedEdit && customUrlInput.trim()) {
+        AppApiService.setAppsScriptUrl(customUrlInput.trim());
+        setActiveUrl(customUrlInput.trim());
       }
     } catch (err) {
       setTestResult({
@@ -68,11 +89,16 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
 
   const handleSaveAndSync = async () => {
     if (!isAdmin) {
-      alert('Hanya Admin yang dapat menyimpan pengaturan Google Spreadsheet.');
+      alert('Akses Ditolak: Hanya Admin yang dapat menyimpan pengaturan Google Spreadsheet.');
       return;
     }
 
-    AppApiService.setAppsScriptUrl(url);
+    const urlToUse = (showAdvancedEdit && customUrlInput.trim()) ? customUrlInput.trim() : activeUrl;
+    if (showAdvancedEdit && customUrlInput.trim()) {
+      AppApiService.setAppsScriptUrl(customUrlInput.trim());
+      setActiveUrl(customUrlInput.trim());
+    }
+
     setIsSyncing(true);
     try {
       if (currentUser) {
@@ -120,57 +146,73 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
 
         {/* Content */}
         <div className="p-5 space-y-4 text-xs">
-          {/* Status Info Banner */}
-          <div className="p-3 bg-cyan-50 border border-cyan-100 rounded-xl text-slate-700 leading-relaxed">
-            <div className="flex items-center gap-2 font-bold text-cyan-900 mb-1">
-              <ShieldCheck className="w-4 h-4 text-cyan-700" />
-              <span>Penyimpanan Aman & Realtime</span>
+          {/* Status Automatic Connection Banner */}
+          {isConfigured ? (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-950 leading-relaxed space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-emerald-900 text-xs sm:text-sm">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Backend Apps Script Siap & Terhubung Otomatis</span>
+              </div>
+              <p className="text-emerald-800 text-[11px] leading-normal">
+                Aplikasi telah terhubung ke Google Apps Script tanpa perlu memasukkan URL secara manual setiap membuka di HP atau browser baru.
+              </p>
+              <div className="bg-white/90 px-3 py-1.5 rounded-lg border border-emerald-200 font-mono text-[10px] text-slate-600 break-all truncate">
+                {activeUrl}
+              </div>
             </div>
-            Setiap transaksi yang dicatat admin akan langsung masuk ke lembar Google Spreadsheet Anda secara otomatis via Apps Script API.
-          </div>
-
-          {/* Web App URL Input */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px]">
-                URL Web App Google Apps Script
-              </label>
-              <button
-                type="button"
-                onClick={onOpenGuideModal}
-                className="text-cyan-700 hover:underline flex items-center gap-1 font-semibold"
-              >
-                <BookOpen className="w-3 h-3" />
-                <span>Lihat Panduan Setup</span>
-              </button>
+          ) : (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-950 leading-relaxed">
+              <div className="flex items-center gap-2 font-bold text-amber-900 mb-1">
+                <AlertCircle className="w-4 h-4 text-amber-600" />
+                <span>URL Apps Script Belum Terkonfigurasi</span>
+              </div>
+              <p className="text-[11px] text-amber-800">
+                Silakan tempel URL Web App dari Google Apps Script di bawah atau atur melalui environment variable <code>VITE_APPS_SCRIPT_URL</code> di Vercel.
+              </p>
             </div>
-            <textarea
-              rows={2}
-              disabled={!isAdmin}
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-[11px] text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
-            />
-            <p className="text-[11px] text-slate-400 mt-1">
-              Dapatkan URL ini setelah menerapkan (deploy) Web App di Google Apps Script dengan akses "Anyone".
-            </p>
-          </div>
+          )}
 
-          {/* Test Connection Button */}
-          <div className="flex items-center gap-2">
+          {/* Quick Actions for Testing & Sync */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleTestConnection}
-              disabled={isTesting || !url.trim()}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50"
+              disabled={isTesting || (!activeUrl && !customUrlInput.trim())}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50 text-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
-              <span>{isTesting ? 'Menguji Koneksi...' : 'Tes Koneksi'}</span>
+              <span>{isTesting ? 'Menguji Server...' : 'Uji Koneksi Server'}</span>
             </button>
-            <span className="text-[11px] text-slate-400">
-              Uji respons server Google
-            </span>
+
+            {isAdmin && isConfigured && (
+              <button
+                type="button"
+                onClick={handleSaveAndSync}
+                disabled={isSyncing}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50 text-xs shadow-xs"
+              >
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Sinkronisasi...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Sinkronkan Sekarang</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onOpenGuideModal}
+              className="text-cyan-700 hover:underline flex items-center gap-1 font-semibold text-xs ml-auto"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Panduan Setup</span>
+            </button>
           </div>
 
           {/* Test Feedback Result */}
@@ -198,40 +240,75 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
             </div>
           )}
 
+          {/* Optional Collapsible URL Editor (For developers / admins who want to change URL) */}
+          <div className="pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedEdit(!showAdvancedEdit)}
+              className="flex items-center justify-between w-full text-left font-bold text-slate-600 hover:text-slate-900 py-1"
+            >
+              <span className="flex items-center gap-1.5 text-[11px]">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                <span>Pengaturan Lanjutan: Ubah URL Apps Script</span>
+              </span>
+              {showAdvancedEdit ? (
+                <ChevronUp className="w-4 h-4 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              )}
+            </button>
+
+            {showAdvancedEdit && (
+              <div className="mt-2 space-y-2 animate-in fade-in">
+                <textarea
+                  rows={2}
+                  disabled={!isAdmin}
+                  value={customUrlInput}
+                  onChange={(e) => setCustomUrlInput(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-[11px] text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
+                />
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Deploy di Apps Script dengan akses: Anyone (Siapa saja)</span>
+                  {customUrlInput !== activeUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomUrlInput(activeUrl)}
+                      className="text-cyan-600 hover:underline font-semibold"
+                    >
+                      Batal Ubah
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {!isAdmin && (
-            <p className="p-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[11px]">
-              Perhatian: Anda masuk sebagai Viewer. Hanya Admin yang dapat mengubah konfigurasi URL Google Apps Script.
+            <p className="p-2 bg-slate-100 text-slate-600 border border-slate-200 rounded-lg text-[11px]">
+              Status Akun: Viewer (Mode Lihat Saja). Hanya Admin yang memiliki hak menyimpan perubahan koneksi atau memicu sinkronisasi manual.
             </p>
           )}
         </div>
 
         {/* Footer Actions */}
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+        <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-200/60 rounded-xl"
+            className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-200/60 rounded-xl text-xs"
           >
             Tutup
           </button>
-          {isAdmin && (
+          {isAdmin && showAdvancedEdit && customUrlInput !== activeUrl && customUrlInput.trim() && (
             <button
               type="button"
               onClick={handleSaveAndSync}
-              disabled={isSyncing || !url.trim()}
-              className="px-5 py-2.5 font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md flex items-center gap-2 transition active:scale-95 disabled:opacity-50"
+              disabled={isSyncing}
+              className="px-4 py-2 font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-xs flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50 text-xs"
             >
-              {isSyncing ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Menyinkronkan...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  <span>Simpan & Sinkronkan Data</span>
-                </>
-              )}
+              <Send className="w-3.5 h-3.5" />
+              <span>Simpan URL Baru</span>
             </button>
           )}
         </div>

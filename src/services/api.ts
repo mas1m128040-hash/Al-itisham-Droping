@@ -26,27 +26,52 @@ export interface GasApiResponse<T = unknown> {
   spreadsheetTitle?: string;
 }
 
+// Default URL dari environment variable (Vite / Vercel build: VITE_APPS_SCRIPT_URL)
+export const PROJECT_DEFAULT_APPS_SCRIPT_URL =
+  ((import.meta as unknown as { env: Record<string, string> }).env?.VITE_APPS_SCRIPT_URL || '').trim();
+
 export class AppApiService {
-  private static getStoredUrl(): string {
-    const fromStorage = localStorage.getItem(STORAGE_CONFIG);
-    if (fromStorage) {
+  /**
+   * Mengambil URL Google Apps Script yang aktif.
+   * Prioritas:
+   * 1. Jika ada URL kustom yang VALID di localStorage (diawali https://script.google.com/macros/s/), gunakan.
+   * 2. Jika di localStorage kosong/rusak/tidak valid, WAJIB menggunakan PROJECT_DEFAULT_APPS_SCRIPT_URL.
+   * 3. LocalStorage kosong TIDAK PERNAH menimpa konfigurasi default proyek!
+   */
+  public static getAppsScriptUrl(): string {
+    const rawStorage = localStorage.getItem(STORAGE_CONFIG);
+    if (rawStorage) {
       try {
-        const parsed = JSON.parse(fromStorage);
-        if (parsed.appsScriptUrl) return parsed.appsScriptUrl.trim();
+        const parsed = JSON.parse(rawStorage);
+        const storedUrl = typeof parsed?.appsScriptUrl === 'string' ? parsed.appsScriptUrl.trim() : '';
+        if (storedUrl.startsWith('https://script.google.com/macros/s/')) {
+          return storedUrl;
+        }
       } catch {
-        // ignore
+        // Abaikan parse error, gunakan default proyek
       }
     }
-    const envUrl = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_APPS_SCRIPT_URL;
-    return envUrl ? envUrl.trim() : '';
+    return PROJECT_DEFAULT_APPS_SCRIPT_URL;
   }
 
-  public static getAppsScriptUrl(): string {
-    return this.getStoredUrl();
+  /**
+   * Cek apakah aplikasi sudah memiliki konfigurasi URL Apps Script yang valid
+   */
+  public static isConfigured(): boolean {
+    const url = this.getAppsScriptUrl();
+    return !!url && url.startsWith('https://script.google.com/macros/s/');
   }
 
+  /**
+   * Menyimpan URL baru ke localStorage.
+   * Jika url kosong, hapus dari localStorage agar kembali ke PROJECT_DEFAULT_APPS_SCRIPT_URL.
+   */
   public static setAppsScriptUrl(url: string): void {
     const trimmed = url.trim();
+    if (!trimmed) {
+      localStorage.removeItem(STORAGE_CONFIG);
+      return;
+    }
     const config = {
       appsScriptUrl: trimmed,
       lastUpdated: new Date().toISOString(),

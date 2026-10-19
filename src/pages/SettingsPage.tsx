@@ -52,7 +52,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const isAdmin = currentUser?.role === 'admin';
 
   // Spreadsheet state
-  const [gasUrl, setGasUrl] = useState(AppApiService.getAppsScriptUrl());
+  const [gasUrl, setGasUrl] = useState(() => AppApiService.getAppsScriptUrl());
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -340,9 +340,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
         {/* URL Input */}
         <div>
-          <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-            URL Web App Apps Script
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              URL Web App Apps Script
+            </label>
+            {AppApiService.isConfigured() && (
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold border border-emerald-200">
+                Otomatis Default Aktif
+              </span>
+            )}
+          </div>
           <textarea
             rows={2}
             disabled={!isAdmin}
@@ -351,6 +358,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             placeholder="https://script.google.com/macros/s/AKfycb.../exec"
             className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono text-[11px] text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
           />
+          <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
+            <span>Ditanam otomatis untuk seluruh browser & HP.</span>
+            {gasUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  AppApiService.setAppsScriptUrl('');
+                  setGasUrl(AppApiService.getAppsScriptUrl());
+                }}
+                className="text-cyan-600 hover:underline font-semibold"
+              >
+                Reset ke Default
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Action Buttons */}
