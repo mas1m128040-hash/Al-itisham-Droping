@@ -233,13 +233,15 @@ export class AppApiService {
    * Test connection to Google Apps Script Web App
    */
   public static async testConnection(customUrl?: string): Promise<{ success: boolean; message: string; title?: string }> {
-    const url = customUrl !== undefined ? customUrl.trim() : this.getAppsScriptUrl();
-    if (!url) {
+    const rawUrl = customUrl !== undefined ? customUrl.trim() : this.getAppsScriptUrl();
+    if (!rawUrl) {
       return {
         success: false,
         message: 'URL Google Apps Script belum diisi. Masukkan URL Web App (akhiran /exec) terlebih dahulu.',
       };
     }
+
+    const url = rawUrl.trim();
 
     if (!url.startsWith('https://script.google.com/macros/s/')) {
       return {
@@ -248,20 +250,33 @@ export class AppApiService {
       };
     }
 
+    if (url.includes('/dev')) {
+      return {
+        success: false,
+        message: 'URL berakhiran "/dev" tidak dapat diakses lintas domain. Gunakan URL Deployment versi Aktif yang berakhiran "/exec" dan pastikan akses "Who has access" disetel ke "Anyone".',
+      };
+    }
+
+    if (!url.endsWith('/exec') && !url.includes('/exec?')) {
+      return {
+        success: false,
+        message: 'URL Apps Script harus berakhiran "/exec". Periksa kembali URL deployment Web App Anda.',
+      };
+    }
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      // Testing via GET action=testConnection dengan cache-busting
+      // Testing via GET action=testConnection dengan cache-busting query parameter _t
+      // Catatan CORS: Jangan sertakan header custom (seperti Cache-Control/Pragma/Authorization)
+      // karena memicu preflight OPTIONS yang ditolak oleh Google Apps Script dan menghasilkan "Failed to fetch".
       const testEndpoint = `${url}${url.includes('?') ? '&' : '?'}action=testConnection&_t=${Date.now()}`;
       const response = await fetch(testEndpoint, {
         method: 'GET',
-        cache: 'no-store',
+        mode: 'cors',
+        redirect: 'follow',
         signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-        },
       });
 
       clearTimeout(timeoutId);
@@ -274,7 +289,7 @@ export class AppApiService {
       }
 
       const json = await response.json() as GasApiResponse;
-      if (json.success) {
+      if (json && json.success) {
         return {
           success: true,
           message: json.message || 'Koneksi ke Google Spreadsheet berhasil!',
@@ -283,7 +298,7 @@ export class AppApiService {
       } else {
         return {
           success: false,
-          message: json.message || 'Apps Script merespons error.',
+          message: json?.message || 'Apps Script merespons gagal.',
         };
       }
     } catch (err: unknown) {
@@ -291,12 +306,12 @@ export class AppApiService {
       if (errorMsg.includes('abort')) {
         return {
           success: false,
-          message: 'Koneksi timeout (lebih dari 12 detik). Pastikan deployment Apps Script disetel ke "Anyone" (Siapa saja).',
+          message: 'Koneksi timeout (lebih dari 12 detik). Pastikan script tidak bermasalah dan deployment disetel ke "Anyone / Siapa saja".',
         };
       }
       return {
         success: false,
-        message: `Gagal menghubungi Apps Script: ${errorMsg}. Pastikan izin deployment adalah "Anyone / Siapa saja".`,
+        message: `Gagal menghubungi Apps Script (${errorMsg}). Pastikan deployment Apps Script baru dibuat via "Deploy > New deployment" atau "Manage deployments > New version", dan hak akses "Who has access" = "Anyone".`,
       };
     }
   }
@@ -329,16 +344,12 @@ export class AppApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      // Cache busting parameter & no-store guarantee agar HP tidak memakai cache lama
+      // Cache-busting via query param _t tanpa custom headers untuk kompatibilitas CORS penuh
       const endpoint = `${url}${url.includes('?') ? '&' : '?'}action=getInitialData&_t=${Date.now()}`;
       const res = await fetch(endpoint, {
         method: 'GET',
-        cache: 'no-store',
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        },
+        mode: 'cors',
+        redirect: 'follow',
         signal: controller.signal,
       });
 

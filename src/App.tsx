@@ -99,6 +99,13 @@ export default function App() {
     loadData();
   }, [loadData]);
 
+  // Sinkronisasi judul tab browser secara dinamis dengan nama aplikasi dari server
+  useEffect(() => {
+    if (businessProfile?.appName) {
+      document.title = businessProfile.appName;
+    }
+  }, [businessProfile?.appName]);
+
   // Auth Handlers
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);

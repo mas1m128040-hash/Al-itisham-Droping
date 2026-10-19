@@ -52,8 +52,8 @@ export default defineConfig(() => {
           navigateFallback: '/index.html',
           runtimeCaching: [
             {
-              // Pastikan Google Apps Script API tidak pernah di-cache oleh Service Worker
-              urlPattern: /^https:\/\/script\.google\.com\/.*/i,
+              // Pastikan Google Apps Script API dan redirect (googleusercontent) tidak pernah di-cache oleh Service Worker
+              urlPattern: /^https:\/\/script\.google(usercontent)?\.com\/.*/i,
               handler: 'NetworkOnly',
             },
             {
